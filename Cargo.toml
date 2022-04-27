@@ -9,6 +9,8 @@ bonsaidb = { path = "../bonsaidb/crates/bonsaidb", features = [
     "server",
     "client",
     "cli",
+    "token-authentication",
+    "password-hashing",
 ] }
 bonsaidb-files = { path = "../bonsaidb/crates/bonsaidb-files", features = [
     "async",
@@ -20,9 +22,15 @@ tokio = { version = "1.17.0", features = [
     "rt-multi-thread",
     "fs",
 ] }
-hyper = { version = "0.14.18", features = ["http1", "server", "runtime"] }
+hyper = { version = "0.14.18", features = [
+    "http1",
+    "server",
+    "runtime",
+    "stream",
+] }
 http = { version = "0.2.6" }
 anyhow = { version = "1.0.56", features = ["backtrace"] }
+thiserror = "1"
 rand = "0.8"
 clap = { version = "3.1.8", features = ["env"] }
 mime_guess = "2.0.4"
@@ -30,3 +38,4 @@ blake3 = { version = "1.3.1" }
 base64 = "0.13.0"
 flume = "0.10.12"
 parking_lot = "0.12.0"
+futures = "0.3"

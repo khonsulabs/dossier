@@ -1,11 +1,14 @@
 use bonsaidb::core::{
-    connection::AsyncConnection,
+    admin::{AuthenticationToken, PermissionGroup, Role},
+    connection::{AsyncConnection, IdentityReference},
     document::{CollectionDocument, Emit},
+    permissions::Statement,
     schema::{Collection, NamedCollection, Schema, SerializedCollection},
 };
 use bonsaidb_files::{BonsaiFiles, FileConfig, FilesSchema};
-use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+
+use crate::permissions::{project_resource_name, DossierAction};
 
 #[derive(Schema, Debug)]
 #[schema(name = "dossier", collections = [Project, ApiToken], include = [FilesSchema<DossierFiles>])]
@@ -52,28 +55,71 @@ impl NamedCollection for Project {
 }
 
 #[derive(Collection, Debug, Clone, Serialize, Deserialize)]
-#[collection(name = "api-tokens", primary_key = u64)]
+#[collection(name = "api-tokens", primary_key = u64, natural_id = |token: &ApiToken| Some(token.authentication_token_id))]
 pub struct ApiToken {
+    pub label: String,
+    pub authentication_token_id: u64,
     pub project_id: u32,
 }
 
 impl ApiToken {
     pub async fn create<C: AsyncConnection>(
+        label: String,
         project_id: u32,
         connection: &C,
-    ) -> anyhow::Result<CollectionDocument<Self>> {
-        loop {
-            let random_id = thread_rng().gen::<u64>();
-            let result = ApiToken { project_id }
-                .insert_into_async(random_id, connection)
-                .await;
-            match result {
-                Ok(doc) => break Ok(doc),
-                Err(err) if err.error.conflicting_document::<Self>().is_some() => {
-                    // try again with a new random number
-                }
-                Err(other) => anyhow::bail!(other.error),
-            }
+        admin: &C,
+    ) -> anyhow::Result<(
+        CollectionDocument<Self>,
+        CollectionDocument<AuthenticationToken>,
+    )> {
+        let group = PermissionGroup {
+            name: label.clone(),
+            statements: vec![Statement::for_resource(project_resource_name(project_id))
+                .allowing(&DossierAction::SyncFiles)],
         }
+        .push_into_async(admin)
+        .await?;
+        let role = Role {
+            name: label.clone(),
+            groups: vec![group.header.id],
+        }
+        .push_into_async(admin)
+        .await?;
+        let authentication_token =
+            AuthenticationToken::create_async(IdentityReference::role(role.header.id)?, admin)
+                .await?;
+        let api_token = ApiToken {
+            project_id,
+            label,
+            authentication_token_id: authentication_token.header.id,
+        }
+        .push_into_async(connection)
+        .await?;
+        Ok((api_token, authentication_token))
+    }
+
+    pub async fn delete<C: AsyncConnection>(
+        api_token: &CollectionDocument<Self>,
+        connection: &C,
+        admin: &C,
+    ) -> anyhow::Result<()> {
+        if let Some(auth_token) =
+            AuthenticationToken::get_async(&api_token.header.id, admin).await?
+        {
+            auth_token.delete_async(admin).await?;
+            println!("Authentication Token {} deleted", auth_token.header.id);
+        }
+        if let Some(role) = Role::load_async(&api_token.contents.label, admin).await? {
+            role.delete_async(admin).await?;
+            println!("Role {} deleted", role.header.id);
+        }
+        if let Some(group) = PermissionGroup::load_async(&api_token.contents.label, admin).await? {
+            group.delete_async(admin).await?;
+            println!("Permission Group {} deleted", group.header.id);
+        }
+
+        api_token.delete_async(connection).await?;
+        println!("Api Token {} deleted", api_token.contents.label);
+        Ok(())
     }
 }

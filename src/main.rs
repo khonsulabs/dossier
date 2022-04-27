@@ -1,11 +1,12 @@
+mod api;
+mod cli;
+mod permissions;
 mod schema;
+mod webserver;
 
 use std::convert::Infallible;
 
 use bonsaidb::{cli::CommandLine, core::async_trait::async_trait, server::Backend};
-
-mod cli;
-mod webserver;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

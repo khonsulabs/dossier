@@ -8,31 +8,28 @@ use std::{
 use bonsaidb::{
     cli::CommandLine,
     core::{
+        arc_bytes::serde::Bytes,
         async_trait::async_trait,
-        connection::{AsyncConnection, AsyncStorageConnection},
+        connection::{AsyncConnection, AsyncStorageConnection, AuthenticationMethod},
         permissions::{
             bonsai::{BonsaiAction, ServerAction},
             Statement,
         },
-        schema::{NamedCollection, NamedReference, SerializedCollection},
+        schema::{NamedReference, SerializedCollection},
     },
     local::config::Builder,
     server::{CustomServer, ServerConfiguration},
-    AnyServerConnection,
+    AnyDatabase, AnyServerConnection,
 };
-use bonsaidb_files::{
-    direct::{Async, File},
-    FileConfig, Truncate,
-};
+use bonsaidb_files::FileConfig;
 use clap::Subcommand;
 use parking_lot::Mutex;
-use tokio::{
-    fs,
-    io::{AsyncReadExt, AsyncWriteExt},
-};
+use tokio::{fs, io::AsyncReadExt};
 
 use crate::{
-    schema::{ApiToken, Dossier, DossierFiles, Metadata, Project},
+    api::{self, DeleteFile, DossierApiHandler, ListFiles, WriteFileData},
+    permissions,
+    schema::{ApiToken, Dossier, DossierFiles, Project},
     webserver, CliBackend,
 };
 
@@ -51,22 +48,20 @@ pub(crate) enum ProjectCommand {
     },
     List,
     Upload {
+        project: String,
         location: PathBuf,
         remote_path: String,
-        #[clap(long("api-token"), env("API_TOKEN"))]
-        api_token: u64,
     },
     Sync {
+        project: String,
         location: PathBuf,
         remote_path: String,
-        #[clap(long("api-token"), env("API_TOKEN"))]
-        api_token: u64,
     },
 }
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ApiTokenCommand {
-    Create { slug: String },
+    Create { slug: String, label: String },
     Delete { token: u64 },
     List,
 }
@@ -79,15 +74,27 @@ impl CommandLine for CliBackend {
     async fn configuration(&mut self) -> anyhow::Result<ServerConfiguration<CliBackend>> {
         Ok(ServerConfiguration::new("dossier.bonsaidb")
             .default_permissions(
-                Statement::for_any().allowing(&BonsaiAction::Server(ServerAction::Connect)),
+                Statement::for_any()
+                    .allowing(&BonsaiAction::Server(ServerAction::Connect))
+                    .allowing(&BonsaiAction::Server(ServerAction::Authenticate(
+                        AuthenticationMethod::PasswordHash,
+                    )))
+                    .allowing(&BonsaiAction::Server(ServerAction::Authenticate(
+                        AuthenticationMethod::Token,
+                    ))),
             )
-            .with_schema::<Dossier>()?)
+            .with_schema::<Dossier>()?
+            .with_api::<DossierApiHandler, ListFiles>()?
+            .with_api::<DossierApiHandler, WriteFileData>()?
+            .with_api::<DossierApiHandler, DeleteFile>()?)
     }
 
     async fn open_server(&mut self) -> anyhow::Result<CustomServer<Self::Backend>> {
         let server = CustomServer::<Self::Backend>::open(self.configuration().await?).await?;
 
         let dossier = server.create_database::<Dossier>("dossier", true).await?;
+
+        permissions::initialize(&server).await?;
 
         webserver::launch(dossier);
 
@@ -115,28 +122,37 @@ impl CommandLine for CliBackend {
             Cli::Project(ProjectCommand::Upload {
                 location,
                 remote_path,
-                api_token,
-            }) => upload_file(location, remote_path, api_token, None, &database).await?,
+                project,
+            }) => upload_file(location, remote_path, &project, &database).await?,
             Cli::Project(ProjectCommand::Sync {
                 location,
                 remote_path,
-                api_token,
-            }) => sync_directory(location, remote_path, api_token, &database).await?,
-            Cli::ApiToken(ApiTokenCommand::Create { slug }) => {
+                project,
+            }) => sync_directory(location, remote_path, &project, &database).await?,
+            Cli::ApiToken(ApiTokenCommand::Create { slug, label }) => {
                 let project_id = NamedReference::from(&slug)
                     .id_async::<Project, _>(&database)
                     .await?
                     .ok_or_else(|| anyhow::anyhow!("project {} not found", slug))?;
 
-                let token = ApiToken::create(project_id, &database).await?;
-                println!("Token {} created.", token.header.id);
+                let (api_token, auth_token) =
+                    ApiToken::create(label, project_id, &database, &connection.admin().await)
+                        .await?;
+
+                // Create a role for this token
+                println!(
+                    "Token {} created for {slug}: id {} - private token {}",
+                    api_token.contents.label,
+                    auth_token.header.id,
+                    auth_token.contents.token.as_str()
+                );
             }
             Cli::ApiToken(ApiTokenCommand::Delete { token }) => {
-                let token = ApiToken::get_async(token, &database)
+                let token = ApiToken::get_async(&token, &database)
                     .await?
                     .ok_or_else(|| anyhow::anyhow!("Token {} not found", token))?;
 
-                token.delete_async(&database).await?;
+                ApiToken::delete(&token, &database, &connection.admin().await).await?;
                 println!("Token {} deleted", token.header.id)
             }
             Cli::ApiToken(ApiTokenCommand::List) => {
@@ -151,7 +167,7 @@ impl CommandLine for CliBackend {
                     .iter()
                     .map(|token| token.contents.project_id)
                     .collect::<HashSet<_>>();
-                let projects = Project::get_multiple_async(project_ids, &database).await?;
+                let projects = Project::get_multiple_async(&project_ids, &database).await?;
                 for token in tokens {
                     if let Some(project) = projects
                         .iter()
@@ -168,92 +184,60 @@ impl CommandLine for CliBackend {
     }
 }
 
-async fn upload_file<Database: AsyncConnection + Clone + 'static>(
+async fn upload_file(
     location: PathBuf,
     mut remote_path: String,
-    api_token: u64,
-    existing_hash: Option<[u8; 32]>,
-    database: &Database,
+    project: &str,
+    database: &AnyDatabase<CliBackend>,
 ) -> anyhow::Result<()> {
-    // Verify the API token
     if !remote_path.starts_with('/') {
-        remote_path.insert(0, '/');
-    }
-    let slug = remote_path.split('/').nth(1).unwrap();
-    let project = Project::load_async(slug, database)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("project {} not found", slug))?;
-    let api_token = ApiToken::get_async(api_token, database)
-        .await?
-        .ok_or_else(|| anyhow::anyhow!("api token not found"))?;
-    if project.header.id != api_token.contents.project_id {
-        anyhow::bail!("api token is for different project");
+        remote_path.insert_str(0, &format!("/{project}/"));
+    } else {
+        remote_path.insert_str(0, &format!("/{project}"));
     }
 
     if remote_path.ends_with('/') {
         let name = location
             .file_name()
             .and_then(|osstr| osstr.to_str())
-            .ok_or_else(|| anyhow::anyhow!("project {} not found", slug))?;
+            .ok_or_else(|| anyhow::anyhow!("invalid file name: {:?}", location.file_name()))?;
         remote_path.push_str(name);
     }
 
-    let file = if let Some(existing_hash) = existing_hash {
-        if let Some(file) = DossierFiles::load_async(&remote_path, database.clone()).await? {
-            if let Some(metadata) = file.metadata() {
-                if metadata.blake3 == existing_hash {
-                    anyhow::bail!("existing hash does not match");
-                }
-            }
-            file.truncate(0, Truncate::RemovingEnd).await?;
-            Some(file)
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let mut file = match file {
-        Some(file) => file,
-        None => {
-            DossierFiles::build(&remote_path)
-                .create_async(database.clone())
-                .await?
-        }
-    };
-
-    let mut writer = file.append_buffered();
     let mut reader = fs::File::open(location).await?;
 
-    let mut scratch = [0; 16 * 1024];
-    let mut sha = blake3::Hasher::new();
+    let mut scratch = [0; DossierFiles::BLOCK_SIZE];
+    let mut current_len = 0;
+    let mut is_first_write = true;
     loop {
-        let bytes_read = reader.read(&mut scratch).await?;
+        let bytes_read = reader.read(&mut scratch[current_len..]).await?;
+        current_len += bytes_read;
+        if bytes_read == 0 || current_len == scratch.len() {
+            write_file_data(
+                &remote_path,
+                &scratch,
+                is_first_write,
+                bytes_read == 0,
+                database,
+            )
+            .await?;
+            is_first_write = false;
+        }
+
         if bytes_read == 0 {
             break;
-        } else {
-            sha.update(&scratch[..bytes_read]);
-            writer.write_all(&scratch[..bytes_read]).await?;
         }
     }
-    tokio::io::copy(&mut reader, &mut writer).await?;
-    writer.shutdown().await?;
-    drop(writer);
 
-    file.update_metadata(Metadata {
-        blake3: sha.finalize().try_into()?,
-    })
-    .await?;
     println!("File uploaded to {remote_path}");
     Ok(())
 }
 
-async fn sync_directory<Database: AsyncConnection + Clone + 'static>(
+async fn sync_directory(
     location: PathBuf,
     mut remote_path: String,
-    api_token: u64,
-    database: &Database,
+    project: &str,
+    database: &AnyDatabase<CliBackend>,
 ) -> anyhow::Result<()> {
     if !location.is_dir() {
         anyhow::bail!("sync can only be used with directories");
@@ -269,11 +253,7 @@ async fn sync_directory<Database: AsyncConnection + Clone + 'static>(
         remote_path.push('/');
     }
 
-    let mut existing_files = DossierFiles::list_recursive_async(&remote_path, database)
-        .await?
-        .into_iter()
-        .map(|file| (file.path(), file))
-        .collect::<HashMap<_, _>>();
+    let mut existing_files = list_files(&format!("/{project}{remote_path}"), database).await?;
     let directories = Arc::new(Mutex::new(vec![(location, remote_path)]));
 
     for _ in 0..std::thread::available_parallelism().unwrap().get() * 2 {
@@ -285,12 +265,10 @@ async fn sync_directory<Database: AsyncConnection + Clone + 'static>(
     let mut total_operations = 0;
     while let Ok(result) = hash_receiver.recv_async().await {
         let file_hash = result?;
-        if let Some(existing) = existing_files.remove(&file_hash.remote_path) {
-            let hash_matches = existing
-                .metadata()
-                .map(|metadata| metadata.blake3 == file_hash.blake3)
-                .unwrap_or_default();
-            if !hash_matches {
+        if let Some(existing_hash) =
+            existing_files.remove(&format!("/{project}{}", file_hash.remote_path))
+        {
+            if existing_hash.as_slice() != file_hash.blake3 {
                 total_operations += 1;
                 operation_sender.send(SyncOperation::Replace(file_hash))?;
             }
@@ -300,7 +278,7 @@ async fn sync_directory<Database: AsyncConnection + Clone + 'static>(
         }
     }
 
-    for (_, file_to_delete) in existing_files {
+    for (file_to_delete, _) in existing_files {
         total_operations += 1;
         operation_sender.send(SyncOperation::Delete(file_to_delete))?;
     }
@@ -308,10 +286,11 @@ async fn sync_directory<Database: AsyncConnection + Clone + 'static>(
 
     let (result_sender, result_receiver) = flume::unbounded();
     for _ in 0..std::thread::available_parallelism().unwrap().get() * 2 {
+        let project = project.to_string();
         tokio::task::spawn(perform_sync_operations(
             operation_receiver.clone(),
             result_sender.clone(),
-            api_token,
+            project,
             database.clone(),
         ));
     }
@@ -327,12 +306,29 @@ async fn sync_directory<Database: AsyncConnection + Clone + 'static>(
     Ok(())
 }
 
-enum SyncOperation<Database: AsyncConnection + Clone> {
-    Create(FileHash),
-    Replace(FileHash),
-    Delete(File<Async<Database>, DossierFiles>),
+async fn list_files(
+    remote_path: &str,
+    database: &AnyDatabase<CliBackend>,
+) -> anyhow::Result<HashMap<String, Bytes>> {
+    match database {
+        AnyDatabase::Local(database) => Ok(api::list_files(remote_path, database).await?),
+        AnyDatabase::Networked(client) => Ok(client
+            .storage()
+            .send_api_request_async(&ListFiles {
+                path: remote_path.to_string(),
+            })
+            .await?),
+    }
 }
 
+#[derive(Debug)]
+enum SyncOperation {
+    Create(FileHash),
+    Replace(FileHash),
+    Delete(String),
+}
+
+#[derive(Debug)]
 pub struct FileHash {
     path: PathBuf,
     remote_path: String,
@@ -408,15 +404,15 @@ async fn check_directory(
     Ok(())
 }
 
-async fn perform_sync_operations<Database: AsyncConnection + Clone + 'static>(
-    operations: flume::Receiver<SyncOperation<Database>>,
+async fn perform_sync_operations(
+    operations: flume::Receiver<SyncOperation>,
     result_sender: flume::Sender<anyhow::Result<String>>,
-    api_token: u64,
-    database: Database,
+    project: String,
+    database: AnyDatabase<CliBackend>,
 ) {
     while let Ok(op) = operations.recv_async().await {
         if result_sender
-            .send(perform_sync_operation(op, api_token, &database).await)
+            .send(perform_sync_operation(op, &project, &database).await)
             .is_err()
         {
             break;
@@ -424,18 +420,17 @@ async fn perform_sync_operations<Database: AsyncConnection + Clone + 'static>(
     }
 }
 
-async fn perform_sync_operation<Database: AsyncConnection + Clone + 'static>(
-    operation: SyncOperation<Database>,
-    api_token: u64,
-    database: &Database,
+async fn perform_sync_operation(
+    operation: SyncOperation,
+    project: &str,
+    database: &AnyDatabase<CliBackend>,
 ) -> anyhow::Result<String> {
     match operation {
         SyncOperation::Create(file_hash) => {
             upload_file(
                 file_hash.path,
                 file_hash.remote_path.clone(),
-                api_token,
-                None,
+                project,
                 database,
             )
             .await?;
@@ -445,8 +440,7 @@ async fn perform_sync_operation<Database: AsyncConnection + Clone + 'static>(
             upload_file(
                 file_hash.path,
                 file_hash.remote_path.clone(),
-                api_token,
-                Some(file_hash.blake3),
+                project,
                 database,
             )
             .await?;
@@ -454,8 +448,47 @@ async fn perform_sync_operation<Database: AsyncConnection + Clone + 'static>(
             Ok(file_hash.remote_path)
         }
         SyncOperation::Delete(file) => {
-            file.delete().await?;
-            Ok(file.path())
+            delete_file(&file, database).await?;
+
+            Ok(file)
         }
+    }
+}
+
+async fn delete_file(
+    remote_path: &str,
+    database: &AnyDatabase<CliBackend>,
+) -> anyhow::Result<bool> {
+    match database {
+        AnyDatabase::Local(database) => Ok(api::delete_file(remote_path, database).await?),
+        AnyDatabase::Networked(client) => Ok(client
+            .storage()
+            .send_api_request_async(&DeleteFile {
+                path: remote_path.to_string(),
+            })
+            .await?),
+    }
+}
+
+async fn write_file_data(
+    path: &str,
+    data: &[u8],
+    start: bool,
+    finished: bool,
+    database: &AnyDatabase<CliBackend>,
+) -> anyhow::Result<Option<Bytes>> {
+    match database {
+        AnyDatabase::Local(database) => {
+            Ok(api::write_file_data(path, data, start, finished, database).await?)
+        }
+        AnyDatabase::Networked(client) => Ok(client
+            .storage()
+            .send_api_request_async(&WriteFileData {
+                path: path.to_string(),
+                data: Bytes::from(data),
+                start,
+                finished,
+            })
+            .await?),
     }
 }

@@ -39,7 +39,7 @@ async fn get_page(
     pages: ServerDatabase<CliBackend>,
 ) -> anyhow::Result<Response<Body>> {
     let path = request.uri().path();
-    let file = match DossierFiles::load_async(path, pages).await? {
+    let file = match DossierFiles::load_async(path, &pages).await? {
         Some(file) => file,
         None => {
             return Ok(Response::builder()
@@ -58,7 +58,7 @@ async fn get_page(
             );
             if send_body {
                 let data = file.contents().await?;
-                Ok(response.body(Body::from(data.into_vec().await?)).unwrap())
+                Ok(response.body(Body::wrap_stream(data)).unwrap())
             } else {
                 Ok(response.body(Body::empty()).unwrap())
             }
@@ -105,7 +105,10 @@ fn construct_page_response(
         response = response.header(CONTENT_TYPE, mime_type);
     }
     if let Some(metadata) = metadata {
-        response = response.header(ETAG, base64::encode(&metadata.blake3));
+        response = response.header(
+            ETAG,
+            base64::encode_config(&metadata.blake3, base64::URL_SAFE_NO_PAD),
+        );
     }
     (send_body, response)
 }
