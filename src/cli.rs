@@ -96,7 +96,7 @@ impl CommandLine for CliBackend {
 
         permissions::initialize(&server).await?;
 
-        webserver::launch(dossier);
+        webserver::launch(server.clone(), dossier);
 
         Ok(server)
     }
@@ -209,25 +209,34 @@ async fn upload_file(
     let mut scratch = [0; DossierFiles::BLOCK_SIZE];
     let mut current_len = 0;
     let mut is_first_write = true;
+    let mut file_hash = None;
     loop {
         let bytes_read = reader.read(&mut scratch[current_len..]).await?;
         current_len += bytes_read;
         if bytes_read == 0 || current_len == scratch.len() {
-            write_file_data(
+            file_hash = write_file_data(
                 &remote_path,
-                &scratch,
+                &scratch[..current_len],
                 is_first_write,
                 bytes_read == 0,
                 database,
             )
             .await?;
             is_first_write = false;
+            current_len = 0;
         }
 
         if bytes_read == 0 {
             break;
         }
     }
+
+    if file_hash.is_none() {
+        file_hash = write_file_data(&remote_path, &[], false, true, database).await?;
+    }
+
+    // TODO verify the hash
+    drop(file_hash);
 
     println!("File uploaded to {remote_path}");
     Ok(())

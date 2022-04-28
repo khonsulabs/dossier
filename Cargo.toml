@@ -11,6 +11,8 @@ bonsaidb = { path = "../bonsaidb/crates/bonsaidb", features = [
     "cli",
     "token-authentication",
     "password-hashing",
+    "hyper",
+    "websockets",
 ] }
 bonsaidb-files = { path = "../bonsaidb/crates/bonsaidb-files", features = [
     "async",

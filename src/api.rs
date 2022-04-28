@@ -184,7 +184,6 @@ pub async fn write_file_data<C: AsyncConnection + Clone + Unpin + 'static>(
         .map_files_error()?
     {
         Some(file) if start => {
-            println!("Truncating");
             file.truncate(0, Truncate::RemovingStart).await?;
             file
         }

@@ -1,6 +1,6 @@
 use std::{collections::HashSet, convert::Infallible, net::SocketAddr};
 
-use bonsaidb::server::ServerDatabase;
+use bonsaidb::server::{CustomServer, ServerDatabase};
 use bonsaidb_files::FileConfig;
 use http::{
     header::{CONTENT_LENGTH, IF_NONE_MATCH},
@@ -19,12 +19,14 @@ use crate::{
     CliBackend,
 };
 
-pub(crate) fn launch(dossier: ServerDatabase<CliBackend>) {
-    let make_service = make_service_fn(move |_conn: &AddrStream| {
+pub(crate) fn launch(server: CustomServer<CliBackend>, dossier: ServerDatabase<CliBackend>) {
+    let make_service = make_service_fn(move |conn: &AddrStream| {
+        let server = server.clone();
         let dossier = dossier.clone();
-        async {
+        let peer_addr = conn.remote_addr();
+        async move {
             Ok::<_, Infallible>(service_fn(move |req| {
-                get_page_with_error_handling(req, dossier.clone())
+                get_page_with_error_handling(req, server.clone(), dossier.clone(), peer_addr)
             }))
         }
     });
@@ -36,9 +38,15 @@ pub(crate) fn launch(dossier: ServerDatabase<CliBackend>) {
 
 async fn get_page(
     request: Request<Body>,
+    server: CustomServer<CliBackend>,
     pages: ServerDatabase<CliBackend>,
+    peer_addr: SocketAddr,
 ) -> anyhow::Result<Response<Body>> {
     let path = request.uri().path();
+    if path == "/_ws" {
+        return Ok(server.upgrade_websocket(peer_addr, request).await);
+    }
+
     let file = match DossierFiles::load_async(path, &pages).await? {
         Some(file) => file,
         None => {
@@ -131,12 +139,16 @@ fn parse_etags(etags: &HeaderValue) -> Option<HashSet<[u8; 32]>> {
 
 async fn get_page_with_error_handling(
     request: Request<Body>,
+    server: CustomServer<CliBackend>,
     pages: ServerDatabase<CliBackend>,
+    peer_addr: SocketAddr,
 ) -> Result<Response<Body>, Infallible> {
-    Ok(get_page(request, pages).await.unwrap_or_else(|err| {
-        Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::from(format!("an error occurred: {err}").into_bytes()))
-            .unwrap()
-    }))
+    Ok(get_page(request, server, pages, peer_addr)
+        .await
+        .unwrap_or_else(|err| {
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Body::from(format!("an error occurred: {err}").into_bytes()))
+                .unwrap()
+        }))
 }
