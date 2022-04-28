@@ -1,0 +1,26 @@
+name: Docs
+
+on: [push]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    environment: khonsu.dev
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Rust
+        uses: hecrj/setup-rust-action@v1
+
+      - name: Generate Docs
+        run: |
+          cargo doc --no-deps --all-features
+
+      - name: Build self to deploy
+        run: |
+          cargo build
+
+      - name: Deploy Docs
+          cargo run -- --token $TOKEN --url wss://khonsu.dev/_ws project sync dossier target/doc main/docs
+        env:
+          TOKEN: ${{ secrets.DOSSIER_API_KEY_ID }}
+          BONSAIDB_TOKEN_SECRET: ${{ secrets.DOSSIER_API_KEY }}
