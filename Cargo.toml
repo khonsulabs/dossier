@@ -3,6 +3,8 @@ name = "dossier"
 version = "0.1.0"
 edition = "2021"
 publish = false
+readme = "./README.md"
+repository = "https://github.com/khonsulabs/dossier"
 
 [dependencies]
 bonsaidb = { git = "https://github.com/khonsulabs/bonsaidb.git", branch = "main", features = [

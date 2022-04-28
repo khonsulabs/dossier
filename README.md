@@ -45,7 +45,7 @@ Eventually, BonsaiDb will be directly servicing the requests. Currently, it
 lacks [multi-domain ACME
 support](https://github.com/khonsulabs/bonsaidb/issues/173).
 
-An example [nginx config](./dossier.nginx.conf) is available in the repository.
+An example [nginx config][nginx-config] is available in the repository.
 
 ### Server Setup
 
@@ -56,7 +56,7 @@ An example [nginx config](./dossier.nginx.conf) is available in the repository.
   dossier admin user add-group your_user administrators
   ```
 
-- Install [`dossier.service`](./dossier.service) into systemd. Customize to
+- Install [`dossier.service`][systemd-service] into systemd. Customize to
   suite your needs.
 
   ```sh
@@ -92,7 +92,7 @@ An example [nginx config](./dossier.nginx.conf) is available in the repository.
   `/project_name/remote/path/`.
 
   This project's [very empty documentation][docs] is deployed [using GitHub
-  Actions](./.github/workflows/docs.yml).
+  Actions][docs-workflow].
 
 [rust]: https://rust-lang.org
 [bonsaidb]: https://bonsaidb.io/
@@ -101,3 +101,6 @@ An example [nginx config](./dossier.nginx.conf) is available in the repository.
 [bonsaidb-commerce]: https://dev.bonsaidb.io/main/benchmarks/commerce/
 [bonsaidb-guide]: https://dev.bonsaidb.io/main/guide/
 [docs]: https://khonsu.dev/dossier/main/docs/dossier/
+[nginx-config]: https://github.com/khonsulabs/dossier/blob/main/dossier.nginx.conf
+[systemd-service]: https://github.com/khonsulabs/dossier/blob/main/dossier.service
+[docs-workflow]: https://github.com/khonsulabs/dossier/blob/main/.github/workflows/docs.yml
