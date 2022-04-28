@@ -65,5 +65,5 @@ jobs:
           
       - name: Deploy
         run: |
-          scp -i ~/.ssh/deploy_key dossier dossier@ams01.khonsu.dev:
+          rsync -avz -e "ssh -i ~/.ssh/deploy_key" dossier dossier@ams01.khonsu.dev:
           ssh -i ~/.ssh/deploy_key dossier@ams01.khonsu.dev sudo /usr/bin/systemctl restart dossier.service
