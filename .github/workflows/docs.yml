@@ -20,6 +20,7 @@ jobs:
           cargo build
 
       - name: Deploy Docs
+        run: |
           cargo run -- --token $TOKEN --url wss://khonsu.dev/_ws project sync dossier target/doc main/docs
         env:
           TOKEN: ${{ secrets.DOSSIER_API_KEY_ID }}
