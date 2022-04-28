@@ -3,7 +3,7 @@ use std::{collections::HashSet, convert::Infallible, net::SocketAddr};
 use bonsaidb::server::{CustomServer, ServerDatabase};
 use bonsaidb_files::FileConfig;
 use http::{
-    header::{CONTENT_LENGTH, IF_NONE_MATCH},
+    header::{CONTENT_LENGTH, IF_NONE_MATCH, LOCATION},
     HeaderValue,
 };
 use hyper::{
@@ -47,7 +47,23 @@ async fn get_page(
         return Ok(server.upgrade_websocket(peer_addr, request).await);
     }
 
-    let file = match DossierFiles::load_async(path, &pages).await? {
+    let mut file = DossierFiles::load_async(path, &pages).await?;
+
+    if file.is_none() {
+        file = DossierFiles::list_async(path, &pages)
+            .await?
+            .into_iter()
+            .find(|file| file.name().starts_with("index."));
+        if file.is_some() && !path.ends_with('/') {
+            // Redirect to the folder's root.
+            return Ok(Response::builder()
+                .header(LOCATION, format!("{path}/"))
+                .status(StatusCode::TEMPORARY_REDIRECT)
+                .body(Body::empty())?);
+        }
+    }
+
+    let file = match file {
         Some(file) => file,
         None => {
             return Ok(Response::builder()
