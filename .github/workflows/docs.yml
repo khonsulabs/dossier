@@ -13,8 +13,7 @@ jobs:
 
       - name: Generate Docs
         run: |
-          ping khonsu.dev -c 5
-          traceroute khonsu.dev
+          curl https://khonsu.dev/dossier/docs/dossier/index.html
           cargo doc --no-deps --all-features
 
       - name: Build self to deploy
