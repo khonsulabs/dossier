@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-bonsaidb = { path = "../bonsaidb/crates/bonsaidb", features = [
+bonsaidb = { git = "https://github.com/khonsulabs/bonsaidb.git", branch = "main", features = [
     "server",
     "client",
     "cli",
@@ -14,7 +14,7 @@ bonsaidb = { path = "../bonsaidb/crates/bonsaidb", features = [
     "hyper",
     "websockets",
 ] }
-bonsaidb-files = { path = "../bonsaidb/crates/bonsaidb-files", features = [
+bonsaidb-files = { git = "https://github.com/khonsulabs/bonsaidb.git", branch = "main", features = [
     "async",
 ] }
 serde = { version = "1.0.136", features = ["derive"] }

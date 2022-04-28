@@ -255,6 +255,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb"
 version = "0.4.0"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#15caccaa97d87baee40a805375164a951d6d6f97"
 dependencies = [
  "anyhow",
  "bonsaidb-client",
@@ -270,6 +271,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-client"
 version = "0.4.0"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#15caccaa97d87baee40a805375164a951d6d6f97"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -298,6 +300,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-core"
 version = "0.4.0"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#15caccaa97d87baee40a805375164a951d6d6f97"
 dependencies = [
  "actionable",
  "arc-bytes",
@@ -324,6 +327,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-files"
 version = "0.1.0"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#15caccaa97d87baee40a805375164a951d6d6f97"
 dependencies = [
  "bonsaidb-core",
  "bonsaidb-utils",
@@ -339,6 +343,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-local"
 version = "0.4.0"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#15caccaa97d87baee40a805375164a951d6d6f97"
 dependencies = [
  "argon2",
  "async-trait",
@@ -373,6 +378,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-macros"
 version = "0.4.0"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#15caccaa97d87baee40a805375164a951d6d6f97"
 dependencies = [
  "attribute-derive",
  "proc-macro-crate",
@@ -387,6 +393,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-server"
 version = "0.4.0"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#15caccaa97d87baee40a805375164a951d6d6f97"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -421,6 +428,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-utils"
 version = "0.4.0"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#15caccaa97d87baee40a805375164a951d6d6f97"
 
 [[package]]
 name = "bumpalo"
