@@ -13,7 +13,6 @@ jobs:
 
       - name: Generate Docs
         run: |
-          curl https://khonsu.dev/dossier/docs/dossier/index.html
           cargo doc --no-deps --all-features
 
       - name: Build self to deploy
