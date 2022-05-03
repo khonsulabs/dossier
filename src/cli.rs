@@ -123,7 +123,7 @@ impl CommandLine for CliBackend {
                 location,
                 remote_path,
                 project,
-            }) => upload_file(location, remote_path, &project, &database).await?,
+            }) => upload_file(location, remote_path, &project, &database, None).await?,
             Cli::Project(ProjectCommand::Sync {
                 location,
                 remote_path,
@@ -189,6 +189,7 @@ async fn upload_file(
     mut remote_path: String,
     project: &str,
     database: &AnyDatabase<CliBackend>,
+    verify_hash: Option<[u8; 32]>,
 ) -> anyhow::Result<()> {
     if !remote_path.starts_with('/') {
         remote_path.insert_str(0, &format!("/{project}/"));
@@ -204,39 +205,46 @@ async fn upload_file(
         remote_path.push_str(name);
     }
 
-    let mut reader = fs::File::open(location).await?;
-
-    let mut scratch = [0; DossierFiles::BLOCK_SIZE];
-    let mut current_len = 0;
-    let mut is_first_write = true;
-    let mut file_hash = None;
     loop {
-        let bytes_read = reader.read(&mut scratch[current_len..]).await?;
-        current_len += bytes_read;
-        if bytes_read == 0 || current_len == scratch.len() {
-            file_hash = write_file_data(
-                &remote_path,
-                &scratch[..current_len],
-                is_first_write,
-                bytes_read == 0,
-                database,
-            )
-            .await?;
-            is_first_write = false;
-            current_len = 0;
+        let mut reader = fs::File::open(&location).await?;
+
+        let mut scratch = [0; DossierFiles::BLOCK_SIZE];
+        let mut current_len = 0;
+        let mut is_first_write = true;
+        let mut file_hash = None;
+        loop {
+            let bytes_read = reader.read(&mut scratch[current_len..]).await?;
+            current_len += bytes_read;
+            if bytes_read == 0 || current_len == scratch.len() {
+                file_hash = write_file_data(
+                    &remote_path,
+                    &scratch[..current_len],
+                    is_first_write,
+                    bytes_read == 0,
+                    database,
+                )
+                .await?;
+                is_first_write = false;
+                current_len = 0;
+            }
+
+            if bytes_read == 0 {
+                break;
+            }
         }
 
-        if bytes_read == 0 {
-            break;
+        if file_hash.is_none() {
+            file_hash = write_file_data(&remote_path, &[], is_first_write, true, database).await?;
+        }
+
+        if let Some(verify_hash) = verify_hash {
+            if file_hash.as_ref().unwrap().as_slice() == verify_hash {
+                break;
+            } else {
+                println!("Upload failed to verify, trying again {remote_path}. Server: {file_hash:?}, Local: {verify_hash:?}");
+            }
         }
     }
-
-    if file_hash.is_none() {
-        file_hash = write_file_data(&remote_path, &[], false, true, database).await?;
-    }
-
-    // TODO verify the hash
-    drop(file_hash);
 
     println!("File uploaded to {remote_path}");
     Ok(())
@@ -265,6 +273,10 @@ async fn sync_directory(
     let mut existing_files = list_files(&format!("/{project}{remote_path}"), database).await?;
     let directories = Arc::new(Mutex::new(vec![(location, remote_path)]));
 
+    println!(
+        "Computing local hashes. Remote has {} files.",
+        existing_files.len()
+    );
     for _ in 0..std::thread::available_parallelism().unwrap().get() * 2 {
         tokio::task::spawn(hash_directories(directories.clone(), hash_sender.clone()));
     }
@@ -293,6 +305,7 @@ async fn sync_directory(
     }
     drop(operation_sender);
 
+    println!("Performing {total_operations} sync operations");
     let (result_sender, result_receiver) = flume::unbounded();
     for _ in 0..std::thread::available_parallelism().unwrap().get() * 2 {
         let project = project.to_string();
@@ -441,6 +454,7 @@ async fn perform_sync_operation(
                 file_hash.remote_path.clone(),
                 project,
                 database,
+                Some(file_hash.blake3),
             )
             .await?;
             Ok(file_hash.remote_path)
@@ -451,6 +465,7 @@ async fn perform_sync_operation(
                 file_hash.remote_path.clone(),
                 project,
                 database,
+                Some(file_hash.blake3),
             )
             .await?;
 
