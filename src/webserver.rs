@@ -1,4 +1,4 @@
-use std::{collections::HashSet, convert::Infallible, net::SocketAddr};
+use std::{collections::HashSet, convert::Infallible, net::SocketAddr, str::Chars};
 
 use bonsaidb::server::{CustomServer, ServerDatabase};
 use bonsaidb_files::FileConfig;
@@ -42,15 +42,16 @@ async fn get_page(
     pages: ServerDatabase<CliBackend>,
     peer_addr: SocketAddr,
 ) -> anyhow::Result<Response<Body>> {
-    let path = request.uri().path();
-    if path == "/_ws" {
+    if request.uri().path() == "/_ws" {
         return Ok(server.upgrade_websocket(peer_addr, request).await);
     }
 
-    let mut file = DossierFiles::load_async(path, &pages).await?;
+    let path = decode_escaped_path_components(request.uri().path())?;
+
+    let mut file = DossierFiles::load_async(&path, &pages).await?;
 
     if file.is_none() {
-        file = DossierFiles::list_async(path, &pages)
+        file = DossierFiles::list_async(&path, &pages)
             .await?
             .into_iter()
             .find(|file| file.name().starts_with("index."));
@@ -167,4 +168,42 @@ async fn get_page_with_error_handling(
                 .body(Body::from(format!("an error occurred: {err}").into_bytes()))
                 .unwrap()
         }))
+}
+
+fn decode_escaped_path_components(path: &str) -> anyhow::Result<String> {
+    PercentDecoder {
+        chars: path.chars(),
+    }
+    .collect()
+}
+
+struct PercentDecoder<'a> {
+    chars: Chars<'a>,
+}
+
+impl<'a> Iterator for PercentDecoder<'a> {
+    type Item = anyhow::Result<char>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.chars.next()? {
+            '%' => {
+                let mut hex = [0; 2];
+                hex[0] = match self.chars.next().map(u8::try_from) {
+                    Some(Ok(ch)) => ch,
+                    _ => return Some(Err(anyhow::anyhow!("invalid percent escape sequence"))),
+                };
+                hex[1] = match self.chars.next().map(u8::try_from) {
+                    Some(Ok(ch)) => ch,
+                    _ => return Some(Err(anyhow::anyhow!("invalid percent escape sequence"))),
+                };
+                match u8::from_str_radix(std::str::from_utf8(&hex).unwrap(), 16) {
+                    Ok(b'/') => Some(Err(anyhow::anyhow!("/ is invalid in a path segment"))),
+                    Ok(byte) => Some(Ok(char::from(byte))),
+                    Err(err) => Some(Err(anyhow::anyhow!(err))),
+                }
+            }
+            '+' => Some(Ok(' ')),
+            other => Some(Ok(other)),
+        }
+    }
 }
