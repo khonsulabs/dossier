@@ -15,9 +15,7 @@ bonsaidb = { git = "https://github.com/khonsulabs/bonsaidb.git", branch = "main"
     "password-hashing",
     "hyper",
     "websockets",
-] }
-bonsaidb-files = { git = "https://github.com/khonsulabs/bonsaidb.git", branch = "main", features = [
-    "async",
+    "files",
 ] }
 serde = { version = "1.0.136", features = ["derive"] }
 tokio = { version = "1.17.0", features = [

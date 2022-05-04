@@ -1,11 +1,13 @@
-use bonsaidb::core::{
-    admin::{AuthenticationToken, PermissionGroup, Role},
-    connection::{AsyncConnection, IdentityReference},
-    document::{CollectionDocument, Emit},
-    permissions::Statement,
-    schema::{Collection, NamedCollection, Schema, SerializedCollection},
+use bonsaidb::{
+    core::{
+        admin::{AuthenticationToken, PermissionGroup, Role},
+        connection::{AsyncConnection, IdentityReference},
+        document::{CollectionDocument, Emit},
+        permissions::Statement,
+        schema::{Collection, NamedCollection, Schema, SerializedCollection},
+    },
+    files::{BonsaiFiles, FileConfig, FilesSchema},
 };
-use bonsaidb_files::{BonsaiFiles, FileConfig, FilesSchema};
 use serde::{Deserialize, Serialize};
 
 use crate::permissions::{project_resource_name, DossierAction};

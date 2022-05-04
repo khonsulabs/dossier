@@ -1,7 +1,9 @@
 use std::{collections::HashSet, convert::Infallible, net::SocketAddr, str::Chars};
 
-use bonsaidb::server::{CustomServer, ServerDatabase};
-use bonsaidb_files::FileConfig;
+use bonsaidb::{
+    files::FileConfig,
+    server::{CustomServer, ServerDatabase},
+};
 use http::{
     header::{CONTENT_LENGTH, IF_NONE_MATCH, LOCATION},
     HeaderValue,

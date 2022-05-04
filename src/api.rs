@@ -8,12 +8,12 @@ use bonsaidb::{
         connection::{AsyncConnection, AsyncStorageConnection, HasSession},
         schema::NamedCollection,
     },
+    files::{FileConfig, Truncate},
     server::{
         api::{Handler, HandlerError, HandlerResult, HandlerSession},
         ServerDatabase,
     },
 };
-use bonsaidb_files::{FileConfig, Truncate};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
@@ -50,23 +50,23 @@ trait ResultExt<T> {
     fn map_files_error(self) -> Result<T, HandlerError<ApiError>>;
 }
 
-impl<A> ResultExt<A> for Result<A, bonsaidb_files::Error> {
+impl<A> ResultExt<A> for Result<A, bonsaidb::files::Error> {
     fn map_files_error(self) -> Result<A, HandlerError<ApiError>> {
         match self {
             Ok(result) => Ok(result),
-            Err(bonsaidb_files::Error::Database(db)) => {
+            Err(bonsaidb::files::Error::Database(db)) => {
                 Err(HandlerError::Server(bonsaidb::server::Error::from(db)))
             }
-            Err(bonsaidb_files::Error::InvalidName) => {
+            Err(bonsaidb::files::Error::InvalidName) => {
                 Err(HandlerError::Api(ApiError::InvalidName))
             }
-            Err(bonsaidb_files::Error::InvalidPath) => {
+            Err(bonsaidb::files::Error::InvalidPath) => {
                 Err(HandlerError::Api(ApiError::InvalidPath))
             }
-            Err(bonsaidb_files::Error::AlreadyExists) => {
+            Err(bonsaidb::files::Error::AlreadyExists) => {
                 Err(HandlerError::Api(ApiError::AlreadyExists))
             }
-            Err(bonsaidb_files::Error::Deleted) => Err(HandlerError::Api(ApiError::Deleted)),
+            Err(bonsaidb::files::Error::Deleted) => Err(HandlerError::Api(ApiError::Deleted)),
         }
     }
 }

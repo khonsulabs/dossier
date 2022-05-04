@@ -17,11 +17,11 @@ use bonsaidb::{
         },
         schema::{NamedReference, SerializedCollection},
     },
+    files::FileConfig,
     local::config::Builder,
     server::{CustomServer, ServerConfiguration},
     AnyDatabase, AnyServerConnection,
 };
-use bonsaidb_files::FileConfig;
 use clap::Subcommand;
 use parking_lot::Mutex;
 use tokio::{fs, io::AsyncReadExt};

@@ -255,11 +255,12 @@ dependencies = [
 [[package]]
 name = "bonsaidb"
 version = "0.4.0"
-source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#39dfa5bc392fbd19ad93e447c7222efb44ba2723"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#95cd1ec69fca69dca061401cce70d25b3d9adc7e"
 dependencies = [
  "anyhow",
  "bonsaidb-client",
  "bonsaidb-core",
+ "bonsaidb-files",
  "bonsaidb-local",
  "bonsaidb-server",
  "clap",
@@ -271,7 +272,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-client"
 version = "0.4.0"
-source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#39dfa5bc392fbd19ad93e447c7222efb44ba2723"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#95cd1ec69fca69dca061401cce70d25b3d9adc7e"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -300,7 +301,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-core"
 version = "0.4.0"
-source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#39dfa5bc392fbd19ad93e447c7222efb44ba2723"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#95cd1ec69fca69dca061401cce70d25b3d9adc7e"
 dependencies = [
  "actionable",
  "arc-bytes",
@@ -327,7 +328,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-files"
 version = "0.1.0"
-source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#39dfa5bc392fbd19ad93e447c7222efb44ba2723"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#95cd1ec69fca69dca061401cce70d25b3d9adc7e"
 dependencies = [
  "bonsaidb-core",
  "bonsaidb-utils",
@@ -343,7 +344,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-local"
 version = "0.4.0"
-source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#39dfa5bc392fbd19ad93e447c7222efb44ba2723"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#95cd1ec69fca69dca061401cce70d25b3d9adc7e"
 dependencies = [
  "argon2",
  "async-trait",
@@ -378,7 +379,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-macros"
 version = "0.4.0"
-source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#39dfa5bc392fbd19ad93e447c7222efb44ba2723"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#95cd1ec69fca69dca061401cce70d25b3d9adc7e"
 dependencies = [
  "attribute-derive",
  "proc-macro-crate",
@@ -393,7 +394,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-server"
 version = "0.4.0"
-source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#39dfa5bc392fbd19ad93e447c7222efb44ba2723"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#95cd1ec69fca69dca061401cce70d25b3d9adc7e"
 dependencies = [
  "async-lock",
  "async-trait",
@@ -428,7 +429,7 @@ dependencies = [
 [[package]]
 name = "bonsaidb-utils"
 version = "0.4.0"
-source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#39dfa5bc392fbd19ad93e447c7222efb44ba2723"
+source = "git+https://github.com/khonsulabs/bonsaidb.git?branch=main#95cd1ec69fca69dca061401cce70d25b3d9adc7e"
 
 [[package]]
 name = "bumpalo"
@@ -799,7 +800,6 @@ dependencies = [
  "base64",
  "blake3",
  "bonsaidb",
- "bonsaidb-files",
  "clap",
  "flume",
  "futures",
@@ -1406,9 +1406,9 @@ dependencies = [
 
 [[package]]
 name = "nebari"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41ffc8d52175b3781d0ab0cb3bc3b8353190e7f28b7350f6575d27148e5bb266"
+checksum = "05c50ed0dbbd2e9a5df9fdf26c433342b3f2c258f18b9bf80b0169025bea13a4"
 dependencies = [
  "arc-bytes",
  "backtrace",
@@ -1464,9 +1464,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
+checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
 ]
@@ -2043,9 +2043,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.80"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f972498cf015f7c0746cac89ebe1d6ef10c293b94175a243a2d9442c163d9944"
+checksum = "9b7ce2b32a1aed03c558dc61a5cd328f15aff2dbc17daad8fb8af04d2100e15c"
 dependencies = [
  "itoa",
  "ryu",
