@@ -207,7 +207,8 @@ pub async fn write_file_data<C: AsyncConnection + Clone + Unpin + 'static>(
         }
 
         let hash = sha.finalize().try_into().unwrap();
-        file.update_metadata(Metadata { blake3: hash }).await?;
+        *file.metadata_mut() = Some(Metadata { blake3: hash });
+        file.update_metadata().await?;
 
         Ok(Some(Bytes::from(hash.to_vec())))
     } else {

@@ -336,7 +336,7 @@ async fn list_files(
         AnyDatabase::Local(database) => Ok(api::list_files(remote_path, database).await?),
         AnyDatabase::Networked(client) => Ok(client
             .storage()
-            .send_api_request_async(&ListFiles {
+            .send_api_request(&ListFiles {
                 path: remote_path.to_string(),
             })
             .await?),
@@ -487,7 +487,7 @@ async fn delete_file(
         AnyDatabase::Local(database) => Ok(api::delete_file(remote_path, database).await?),
         AnyDatabase::Networked(client) => Ok(client
             .storage()
-            .send_api_request_async(&DeleteFile {
+            .send_api_request(&DeleteFile {
                 path: remote_path.to_string(),
             })
             .await?),
@@ -507,7 +507,7 @@ async fn write_file_data(
         }
         AnyDatabase::Networked(client) => Ok(client
             .storage()
-            .send_api_request_async(&WriteFileData {
+            .send_api_request(&WriteFileData {
                 path: path.to_string(),
                 data: Bytes::from(data),
                 start,

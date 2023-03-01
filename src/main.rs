@@ -15,7 +15,7 @@ async fn main() -> anyhow::Result<()> {
     CliBackend.run().await
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct CliBackend;
 
 #[async_trait]

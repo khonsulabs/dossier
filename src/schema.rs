@@ -20,7 +20,7 @@ pub struct Dossier;
 pub enum DossierFiles {}
 
 impl FileConfig for DossierFiles {
-    type Metadata = Metadata;
+    type Metadata = Option<Metadata>;
     const BLOCK_SIZE: usize = BonsaiFiles::BLOCK_SIZE;
 
     fn files_name() -> bonsaidb::core::schema::CollectionName {
@@ -32,7 +32,7 @@ impl FileConfig for DossierFiles {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Copy)]
 pub struct Metadata {
     pub blake3: [u8; 32],
 }

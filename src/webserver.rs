@@ -1,5 +1,6 @@
 use std::{collections::HashSet, convert::Infallible, net::SocketAddr, str::Chars};
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use bonsaidb::{
     files::FileConfig,
     server::{CustomServer, ServerDatabase},
@@ -81,7 +82,7 @@ async fn get_page(
             let (send_body, response) = construct_page_response(
                 &request,
                 mime_guess::from_path(file.name()),
-                file.metadata(),
+                file.metadata().as_ref(),
             );
             if send_body {
                 let data = file.contents().await?;
@@ -94,7 +95,7 @@ async fn get_page(
             let (_, response) = construct_page_response(
                 &request,
                 mime_guess::from_path(file.name()),
-                file.metadata(),
+                file.metadata().as_ref(),
             );
 
             // TODO get the file's length without retrieiving all blocks
@@ -132,10 +133,7 @@ fn construct_page_response(
         response = response.header(CONTENT_TYPE, mime_type);
     }
     if let Some(metadata) = metadata {
-        response = response.header(
-            ETAG,
-            base64::encode_config(&metadata.blake3, base64::URL_SAFE_NO_PAD),
-        );
+        response = response.header(ETAG, URL_SAFE_NO_PAD.encode(metadata.blake3));
     }
     (send_body, response)
 }
@@ -146,7 +144,7 @@ fn parse_etags(etags: &HeaderValue) -> Option<HashSet<[u8; 32]>> {
     let mut parsed_tags = HashSet::new();
     for quoted_tag in fields {
         let tag = quoted_tag.split('"').nth(1)?;
-        if let Ok(tag) = base64::decode(tag) {
+        if let Ok(tag) = URL_SAFE_NO_PAD.decode(tag) {
             if let Ok(tag) = tag.try_into() {
                 parsed_tags.insert(tag);
             }
