@@ -39,6 +39,7 @@ pub(crate) enum Cli {
     Project(ProjectCommand),
     #[clap(subcommand)]
     ApiToken(ApiTokenCommand),
+    Compact,
 }
 
 #[derive(Debug, Subcommand)]
@@ -178,6 +179,9 @@ impl CommandLine for CliBackend {
                         println!("{}: {}", token.contents.project_id, token.header.id);
                     }
                 }
+            }
+            Cli::Compact => {
+                database.compact().await?;
             }
         }
         Ok(())

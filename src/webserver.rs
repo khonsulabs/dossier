@@ -1,4 +1,4 @@
-use std::{collections::HashSet, convert::Infallible, net::SocketAddr, str::Chars};
+use std::{collections::HashSet, convert::Infallible, net::SocketAddr, str::Chars, time::Instant};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use bonsaidb::{
@@ -49,6 +49,8 @@ async fn get_page(
         return Ok(server.upgrade_websocket(peer_addr, request).await);
     }
 
+    let start = Instant::now();
+
     let path = decode_escaped_path_components(request.uri().path())?;
 
     let mut file = DossierFiles::load_async(&path, &pages).await?;
@@ -67,11 +69,12 @@ async fn get_page(
         }
     }
 
-    let file = match file {
+    let mut file = match file {
         Some(file) => file,
         None => {
             return Ok(Response::builder()
                 .status(StatusCode::NOT_FOUND)
+                .header("Server-Timing", server_timings_header(start))
                 .body(Body::from("Not found"))
                 .unwrap())
         }
@@ -83,6 +86,7 @@ async fn get_page(
                 &request,
                 mime_guess::from_path(file.name()),
                 file.metadata().as_ref(),
+                start,
             );
             if send_body {
                 let data = file.contents().await?;
@@ -96,12 +100,11 @@ async fn get_page(
                 &request,
                 mime_guess::from_path(file.name()),
                 file.metadata().as_ref(),
+                start,
             );
 
-            // TODO get the file's length without retrieiving all blocks
-            let data = file.contents().await?;
             Ok(response
-                .header(CONTENT_LENGTH, data.len())
+                .header(CONTENT_LENGTH, file.len().await?)
                 .body(Body::empty())
                 .unwrap())
         }
@@ -114,10 +117,15 @@ async fn get_page(
     }
 }
 
+fn server_timings_header(start: Instant) -> String {
+    format!("req;dur={:0.2}", start.elapsed().as_secs_f32() * 1_000.)
+}
+
 fn construct_page_response(
     request: &Request<Body>,
     mime_guess: MimeGuess,
     metadata: Option<&Metadata>,
+    start: Instant,
 ) -> (bool, http::response::Builder) {
     let (send_body, mut response) = match (request.headers().get(IF_NONE_MATCH), metadata) {
         (Some(etags), Some(metadata))
@@ -135,6 +143,7 @@ fn construct_page_response(
     if let Some(metadata) = metadata {
         response = response.header(ETAG, URL_SAFE_NO_PAD.encode(metadata.blake3));
     }
+    response = response.header("Server-Timing", server_timings_header(start));
     (send_body, response)
 }
 
