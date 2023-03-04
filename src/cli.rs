@@ -220,9 +220,10 @@ async fn upload_file(
     }
 
     loop {
+        let mut verify_hash = VerificationHash::new(verify_hash);
         let mut reader = fs::File::open(&location).await?;
 
-        let mut scratch = [0; 1_048_576];
+        let mut scratch = vec![0; 1_048_576];
         let mut current_len = 0;
         let mut is_first_write = true;
         let mut file_hash = None;
@@ -238,6 +239,7 @@ async fn upload_file(
                     database,
                 )
                 .await?;
+                verify_hash.update(&scratch[..current_len]);
                 is_first_write = false;
                 current_len = 0;
             }
@@ -251,20 +253,45 @@ async fn upload_file(
             file_hash = write_file_data(&remote_path, &[], is_first_write, true, database).await?;
         }
 
-        if let Some(verify_hash) = verify_hash {
-            if file_hash.as_ref().unwrap().as_slice() == verify_hash {
-                break;
-            } else {
-                println!("Upload failed to verify, trying again {remote_path}. Server: {file_hash:?}, Local: {verify_hash:?}");
-            }
-        } else {
-            // No verification, always break
+        let verify_hash = verify_hash.finish();
+        if file_hash.as_ref().unwrap().as_slice() == verify_hash {
             break;
+        } else {
+            println!("Upload failed to verify, trying again {remote_path}. Server: {file_hash:?}, Local: {verify_hash:?}");
         }
     }
 
     println!("File uploaded to {remote_path}");
     Ok(())
+}
+
+#[allow(clippy::large_enum_variant)]
+enum VerificationHash {
+    Static([u8; 32]),
+    Computing(blake3::Hasher),
+}
+
+impl VerificationHash {
+    pub fn new(verify_hash: Option<[u8; 32]>) -> Self {
+        if let Some(verify_hash) = verify_hash {
+            Self::Static(verify_hash)
+        } else {
+            Self::Computing(blake3::Hasher::new())
+        }
+    }
+
+    pub fn update(&mut self, bytes: &[u8]) {
+        if let VerificationHash::Computing(hasher) = self {
+            hasher.update(bytes);
+        }
+    }
+
+    pub fn finish(self) -> [u8; 32] {
+        match self {
+            VerificationHash::Static(value) => value,
+            VerificationHash::Computing(hasher) => *hasher.finalize().as_bytes(),
+        }
+    }
 }
 
 async fn sync_directory(
