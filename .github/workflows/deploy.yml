@@ -55,7 +55,7 @@ jobs:
 
       - name: Deploy Build to khonsu.dev
         run: |
-          cargo run -- --token $TOKEN --url wss://khonsu.dev/_ws project upload dossier dossier builds/main/dossier
+          ./dossier --token $TOKEN --url wss://khonsu.dev/_ws project upload dossier dossier builds/main/dossier
         env:
           TOKEN: ${{ secrets.DOSSIER_API_KEY_ID }}
           BONSAIDB_TOKEN_SECRET: ${{ secrets.DOSSIER_API_KEY }}
