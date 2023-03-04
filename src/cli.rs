@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -17,13 +17,17 @@ use bonsaidb::{
         },
         schema::{NamedReference, SerializedCollection},
     },
-    files::FileConfig,
+    files::{
+        direct::{Async, File},
+        FileConfig,
+    },
     local::config::Builder,
     server::{CustomServer, ServerConfiguration},
     AnyDatabase, AnyServerConnection,
 };
 use clap::Subcommand;
 use parking_lot::Mutex;
+use ron::ser::PrettyConfig;
 use tokio::{fs, io::AsyncReadExt};
 
 use crate::{
@@ -40,6 +44,9 @@ pub(crate) enum Cli {
     #[clap(subcommand)]
     ApiToken(ApiTokenCommand),
     Compact,
+    Backup {
+        destination: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -182,6 +189,9 @@ impl CommandLine for CliBackend {
             }
             Cli::Compact => {
                 database.compact().await?;
+            }
+            Cli::Backup { destination } => {
+                backup(&database, &destination).await?;
             }
         }
         Ok(())
@@ -519,4 +529,88 @@ async fn write_file_data(
             })
             .await?),
     }
+}
+
+async fn backup(database: &AnyDatabase<CliBackend>, destination: &Path) -> anyhow::Result<()> {
+    if !destination.exists() {
+        std::fs::create_dir_all(destination)?;
+    }
+
+    let files = DossierFiles::list_recursive_async("/", database).await?;
+    let mut tasks = Vec::new();
+    let number_of_tasks = std::thread::available_parallelism().map_or(8, |t| t.get());
+    let (sender, receiver) =
+        flume::bounded::<File<Async<AnyDatabase<CliBackend>>, DossierFiles>>(number_of_tasks);
+
+    for _ in 0..number_of_tasks {
+        let receiver = receiver.clone();
+        let folder = destination.to_path_buf();
+        tasks.push(tokio::spawn(async move {
+            let mut file_contents = Vec::new();
+            while let Ok(file) = receiver.recv_async().await {
+                let mut folder = folder.clone();
+                for intermediate_name in file.containing_path().split_terminator('/').skip(1) {
+                    folder.push(intermediate_name);
+                }
+                if !folder.exists() {
+                    std::fs::create_dir_all(&folder)?;
+                }
+
+                let file_path = folder.join(file.name());
+                if file_path.exists() {
+                    // Check that the file hash doesn't match before re-downloading.
+                    let mut hasher = blake3::Hasher::new();
+                    let mut existing_file = fs::File::open(&file_path).await?;
+                    let mut scratch = [0; 16 * 1024];
+                    loop {
+                        let bytes_read = existing_file.read(&mut scratch).await?;
+                        if bytes_read > 0 {
+                            hasher.update(&scratch[..bytes_read]);
+                        } else {
+                            break;
+                        }
+                    }
+                    let hash = hasher.finalize().try_into().unwrap();
+                    if file.metadata().map(|m| m.blake3) == Some(hash) {
+                        println!("Skipping {}{}", file.containing_path(), file.name());
+                        continue;
+                    }
+                }
+
+                let mut contents = file.contents().await?;
+
+                file_contents.clear();
+                contents.read_to_end(&mut file_contents).await?;
+
+                println!("Downloading {}{}", file.containing_path(), file.name());
+                std::fs::write(file_path, &file_contents)?;
+            }
+
+            anyhow::Ok(())
+        }));
+    }
+
+    for file in files {
+        sender.send_async(file).await?;
+    }
+
+    drop(sender);
+
+    for task in tasks {
+        task.await??;
+    }
+
+    let projects = Project::all_async(database).await?;
+    std::fs::write(
+        destination.join("projects.ron"),
+        ron::Options::default().to_string_pretty(&projects, PrettyConfig::default())?,
+    )?;
+
+    let api_tokens = ApiToken::all_async(database).await?;
+    std::fs::write(
+        destination.join("api-tokens.ron"),
+        ron::Options::default().to_string_pretty(&api_tokens, PrettyConfig::default())?,
+    )?;
+
+    Ok(())
 }

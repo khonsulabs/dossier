@@ -42,6 +42,7 @@ base64 = "0.21.0"
 flume = "0.10.12"
 parking_lot = "0.12.0"
 futures = "0.3"
+ron = "0.8.0"
 
 
 # [patch."https://github.com/khonsulabs/bonsaidb.git"]
