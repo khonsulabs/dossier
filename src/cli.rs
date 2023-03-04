@@ -222,7 +222,7 @@ async fn upload_file(
     loop {
         let mut reader = fs::File::open(&location).await?;
 
-        let mut scratch = [0; DossierFiles::BLOCK_SIZE];
+        let mut scratch = [0; 1_048_576];
         let mut current_len = 0;
         let mut is_first_write = true;
         let mut file_hash = None;
@@ -257,6 +257,9 @@ async fn upload_file(
             } else {
                 println!("Upload failed to verify, trying again {remote_path}. Server: {file_hash:?}, Local: {verify_hash:?}");
             }
+        } else {
+            // No verification, always break
+            break;
         }
     }
 
