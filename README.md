@@ -8,12 +8,12 @@ designed primarily for hosting build artifacts.
 
 One of the most common ways to deploy documentation, benchmark results, or
 generated static websites using GitHub Actions is to build the site in a
-`gh-pages` branch. This workflow is easy, and is how BonsaiDb's
+`gh-pages` branch. This workflow is easy, and was how BonsaiDb's
 [documentation][bonsaidb-docs], [benchmark][bonsaidb-suite]
-[results][bonsaidb-commerce], and [user's guide][bonsaidb-guide] are all
-deployed this way currently.
+[results][bonsaidb-commerce], and [user's guide][bonsaidb-guide] were all
+deployed.
 
-The issue arises when cloning the BonsaiDb repository. Using git we can get a
+The issue arpse when cloning the BonsaiDb repository. Using git we could get a
 rough idea of the impact on disk usage:
 
 ```sh
@@ -25,18 +25,20 @@ git rev-list --disk-usage --objects --all --not refs/heads/main
 > 3,215,042,793 (~3.2gb)
 ```
 
-BonsaiDb's repository size is inflated by over 3 gigabytes to
-support the gh-pages branch.
+BonsaiDb's repository size was inflated by over 3 gigabytes to support the
+`gh-pages` branch.
 
-There are alternative ways to solve this problem than building something new.
+There were alternative ways to solve this problem than building something new.
 However, this seemed like a good test project for BonsaiDb that would see
 day-to-day use, and there are other tangential features a development server
 like this could provide.
 
 ## Project Status
 
-This project is in early development. No one should consider using this until at
-least the BonsaiDb pages have been re-hosted onto this project.
+This project is in early development. While BonsaiDb's `gh-pages` branch has
+been replaced by this, it is still considered an internal tool despite being
+open-source. The design of this project is still early enough that there could
+be breaking changes that require manual migration.
 
 ## Command Line Guide
 
@@ -72,7 +74,7 @@ An example [nginx config][nginx-config] is available in the repository.
   ```sh
   dossier -u your_user --url wss://your_domain/_ws project create project_name
   ```
-  
+
 - Create the API Token
 
   ```sh

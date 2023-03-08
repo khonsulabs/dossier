@@ -21,7 +21,6 @@ fn main() -> anyhow::Result<()> {
                 .map(NonZeroUsize::get)
         })
         .unwrap_or(16);
-    println!("Starting with {worker_threads} worker threads");
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .worker_threads(worker_threads)

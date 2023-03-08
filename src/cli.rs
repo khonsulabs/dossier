@@ -44,7 +44,7 @@ pub(crate) enum Cli {
     #[clap(subcommand)]
     ApiToken(ApiTokenCommand),
     Compact,
-    Backup {
+    Archive {
         destination: PathBuf,
     },
 }
@@ -190,7 +190,7 @@ impl CommandLine for CliBackend {
             Cli::Compact => {
                 database.compact().await?;
             }
-            Cli::Backup { destination } => {
+            Cli::Archive { destination } => {
                 backup(&database, &destination).await?;
             }
         }
@@ -351,7 +351,7 @@ async fn sync_directory(
 
     println!("Performing {total_operations} sync operations");
     let (result_sender, result_receiver) = flume::unbounded();
-    for _ in 0..std::thread::available_parallelism().unwrap().get() * 2 {
+    for _ in 0..std::thread::available_parallelism().unwrap().get() * 4 {
         let project = project.to_string();
         tokio::task::spawn(perform_sync_operations(
             operation_receiver.clone(),
