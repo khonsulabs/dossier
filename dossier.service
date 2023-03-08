@@ -4,7 +4,7 @@ After=network.target
 
 
 [Service]
-ExecStart=/home/dossier/dossier server serve --http 127.0.0.1:8080
+ExecStart=/home/dossier/dossier serve --http 127.0.0.1:8080
 WorkingDirectory=/home/dossier
 User=dossier
 Group=dossier

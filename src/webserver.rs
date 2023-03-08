@@ -61,9 +61,10 @@ async fn get_page(
             .into_iter()
             .find(|file| file.name().starts_with("index."));
         if file.is_some() && !path.ends_with('/') {
+            let (_, folder_name) = path.rsplit_once('/').unwrap_or(("", &path));
             // Redirect to the folder's root.
             return Ok(Response::builder()
-                .header(LOCATION, format!("{path}/"))
+                .header(LOCATION, format!("./{folder_name}/"))
                 .status(StatusCode::TEMPORARY_REDIRECT)
                 .body(Body::empty())?);
         }
