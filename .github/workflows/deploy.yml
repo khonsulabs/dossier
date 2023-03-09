@@ -4,7 +4,7 @@ on: [push]
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v2
@@ -20,7 +20,7 @@ jobs:
           RUST_BACKTRACE: 1
 
   package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     environment: khonsu.dev
     timeout-minutes: 30
     steps:
@@ -39,7 +39,7 @@ jobs:
           path: target/release/dossier
 
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     environment: khonsu.dev
     timeout-minutes: 30
     needs: [package, test]
@@ -55,7 +55,7 @@ jobs:
 
       - name: Deploy Build to khonsu.dev
         run: |
-          ./dossier --token $TOKEN --url $DOSSIER_URL project upload dossier dossier builds/main/dossier
+          ./dossier --token $TOKEN --url $URL project upload dossier dossier builds/main/dossier
         env:
           URL: ${{ secrets.DOSSIER_URL }}
           TOKEN: ${{ secrets.DOSSIER_API_KEY_ID }}
