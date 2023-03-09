@@ -2,7 +2,10 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        atomic::{self, AtomicU8},
+        Arc,
+    },
 };
 
 use bonsaidb::{
@@ -131,7 +134,7 @@ impl CommandLine for CliBackend {
                 location,
                 remote_path,
                 project,
-            }) => upload_file(location, remote_path, &project, &database, None).await?,
+            }) => upload_file(&location, &remote_path, &project, &database, None).await?,
             Cli::Project(ProjectCommand::Sync {
                 location,
                 remote_path,
@@ -199,17 +202,17 @@ impl CommandLine for CliBackend {
 }
 
 async fn upload_file(
-    location: PathBuf,
-    mut remote_path: String,
+    location: &Path,
+    remote_path: &str,
     project: &str,
     database: &AnyDatabase<CliBackend>,
     verify_hash: Option<[u8; 32]>,
 ) -> anyhow::Result<()> {
-    if !remote_path.starts_with('/') {
-        remote_path.insert_str(0, &format!("/{project}/"));
+    let mut remote_path = if !remote_path.starts_with('/') {
+        format!("/{project}/{remote_path}")
     } else {
-        remote_path.insert_str(0, &format!("/{project}"));
-    }
+        format!("/{project}{remote_path}")
+    };
 
     if remote_path.ends_with('/') {
         let name = location
@@ -351,13 +354,16 @@ async fn sync_directory(
 
     println!("Performing {total_operations} sync operations");
     let (result_sender, result_receiver) = flume::unbounded();
+    let error_counter = Arc::new(AtomicU8::default());
     for _ in 0..std::thread::available_parallelism().unwrap().get() * 4 {
         let project = project.to_string();
+        let error_counter = error_counter.clone();
         tokio::task::spawn(perform_sync_operations(
             operation_receiver.clone(),
             result_sender.clone(),
             project,
             database.clone(),
+            error_counter,
         ));
     }
     drop(result_sender);
@@ -475,50 +481,61 @@ async fn perform_sync_operations(
     result_sender: flume::Sender<anyhow::Result<String>>,
     project: String,
     database: AnyDatabase<CliBackend>,
+    error_counter: Arc<AtomicU8>,
 ) {
     while let Ok(op) = operations.recv_async().await {
-        if result_sender
-            .send(perform_sync_operation(op, &project, &database).await)
-            .is_err()
-        {
+        let result = loop {
+            match perform_sync_operation(&op, &project, &database).await {
+                Ok(result) => {
+                    error_counter.store(0, atomic::Ordering::SeqCst);
+                    break Ok(result);
+                }
+                Err(err) if error_counter.fetch_add(1, atomic::Ordering::SeqCst) < 5 => {
+                    eprintln!("error encountered during sync, but retrying: {err}");
+                    continue;
+                }
+                Err(err) => break Err(err),
+            }
+        };
+        if result_sender.send(result).is_err() {
             break;
         }
     }
 }
 
 async fn perform_sync_operation(
-    operation: SyncOperation,
+    operation: &SyncOperation,
     project: &str,
     database: &AnyDatabase<CliBackend>,
 ) -> anyhow::Result<String> {
     match operation {
         SyncOperation::Create(file_hash) => {
             upload_file(
-                file_hash.path,
-                file_hash.remote_path.clone(),
+                &file_hash.path,
+                &file_hash.remote_path,
                 project,
                 database,
                 Some(file_hash.blake3),
             )
             .await?;
-            Ok(file_hash.remote_path)
+            Ok(file_hash.remote_path.clone())
         }
         SyncOperation::Replace(file_hash) => {
             upload_file(
-                file_hash.path,
-                file_hash.remote_path.clone(),
+                &file_hash.path,
+                &file_hash.remote_path,
                 project,
                 database,
                 Some(file_hash.blake3),
             )
             .await?;
 
-            Ok(file_hash.remote_path)
+            Ok(file_hash.remote_path.clone())
         }
         SyncOperation::Delete(file) => {
-            delete_file(&file, database).await?;
+            delete_file(file, database).await?;
 
-            Ok(file)
+            Ok(file.clone())
         }
     }
 }
