@@ -52,7 +52,7 @@ jobs:
       - name: Gather artifacts
         run: |
           chmod a+x dossier
-          tar -czf dossier.tgz
+          tar -czf dossier.tgz dossier
 
       - name: Deploy Build to khonsu.dev
         run: |
