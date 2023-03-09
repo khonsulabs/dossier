@@ -21,7 +21,7 @@ jobs:
 
       - name: Deploy Docs
         run: |
-          cargo run -- --token $TOKEN --url $DOSSIER_URL project sync dossier target/doc main/docs
+          cargo run -- --token $TOKEN --url $URL project sync dossier target/doc main/docs
         env:
           URL: ${{ secrets.DOSSIER_URL }}
           TOKEN: ${{ secrets.DOSSIER_API_KEY_ID }}
