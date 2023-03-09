@@ -52,3 +52,9 @@ ron = "0.8.0"
 # [patch.crates-io]
 # nebari = { path = "../nebari/nebari" }
 # arc-bytes = { path = "../shared-buffer" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"     # optimize release for size
+strip = "debuginfo" # release builds keep symbols but not debug info

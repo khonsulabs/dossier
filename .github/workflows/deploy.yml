@@ -52,10 +52,11 @@ jobs:
       - name: Gather artifacts
         run: |
           chmod a+x dossier
+          tar -czf dossier.tgz
 
       - name: Deploy Build to khonsu.dev
         run: |
-          ./dossier --token $TOKEN --url $URL project upload dossier dossier builds/main/dossier
+          ./dossier --token $TOKEN --url $URL project upload dossier dossier.tgz builds/main/dossier-x86_64-unknown-linux-gnu.tgz
         env:
           URL: ${{ secrets.DOSSIER_URL }}
           TOKEN: ${{ secrets.DOSSIER_API_KEY_ID }}
