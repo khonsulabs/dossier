@@ -2,12 +2,12 @@
 
 mod api;
 mod cli;
+mod compactor;
 mod permissions;
 mod schema;
 mod webserver;
 
-use std::convert::Infallible;
-use std::num::NonZeroUsize;
+use std::{convert::Infallible, num::NonZeroUsize};
 
 use bonsaidb::{cli::CommandLine, core::async_trait::async_trait, server::Backend};
 

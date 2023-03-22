@@ -35,7 +35,7 @@ use tokio::{fs, io::AsyncReadExt};
 
 use crate::{
     api::{self, DeleteFile, DossierApiHandler, ListFiles, WriteFileData},
-    permissions,
+    compactor, permissions,
     schema::{ApiToken, Dossier, DossierFiles, Project},
     webserver, CliBackend,
 };
@@ -107,7 +107,9 @@ impl CommandLine for CliBackend {
 
         permissions::initialize(&server).await?;
 
-        webserver::launch(server.clone(), dossier);
+        webserver::launch(server.clone(), dossier.clone());
+
+        compactor::launch(dossier);
 
         Ok(server)
     }
